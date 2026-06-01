@@ -5,9 +5,15 @@ import { EducationSchema } from './Education'
 
 export const ProfileSchema = z.object({
   fullName: z.string(),
-  email: z.string().email(),
+  firstName: z.string(),
+  lastName: z.string(),
+  email: z.string(),
   phone: z.string(),
   location: z.string(),
+  city: z.string(),
+  state: z.string(),
+  country: z.string(),
+  zipcode: z.string(),
   linkedIn: z.string().optional(),
   website: z.string().optional(),
   summary: z.string(),
@@ -19,14 +25,20 @@ export const ProfileSchema = z.object({
 export type Profile = z.infer<typeof ProfileSchema>
 
 export const defaultProfile: Profile = {
-  fullName: '',
-  email: '',
-  phone: '',
-  location: '',
-  linkedIn: '',
-  website: '',
-  summary: '',
-  skills: [],
-  experience: [],
-  education: [],
+    fullName: '',
+    email: '',
+    phone: '',
+    location: '',
+    linkedIn: '',
+    website: '',
+    summary: '',
+    skills: [],
+    experience: [],
+    education: [],
+    firstName: '',
+    lastName: '',
+    city: '',
+    state: '',
+    zipcode: '',
+    country: ''
 }

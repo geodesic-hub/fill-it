@@ -5,7 +5,7 @@ export const ExperienceSchema = z.object({
   title: z.string(),
   startDate: z.string(),
   endDate: z.string().optional(),
-  description: z.string(),
+  roleDescription: z.string(),
 })
 
 export type Experience = z.infer<typeof ExperienceSchema>
