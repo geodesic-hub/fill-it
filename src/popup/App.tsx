@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Country, State } from 'country-state-city'
 import { loadProfile, saveProfile } from "../shared/Storage"
 import { defaultProfile, type Profile } from "../shared/Profile";
 
@@ -47,24 +48,39 @@ function App() {
                 />
                 <input
                     type="text"
+                    placeholder="Preferred Name"
+                    className="border rounded px-3 py-2 text-sm w-full"
+                    value={profile.preferredName}
+                    onChange={(e) => { setProfile({ ...profile, preferredName: e.target.value }) }}
+                />
+                <select
+                    className="border rounded px-3 py-2 text-sm w-full"
+                    value={profile.country}
+                    onChange={(e) => { setProfile({ ...profile, country: e.target.value, state: '', city: '' }) }}
+                >
+                    <option value="">Select Country</option>
+                    {Country.getAllCountries().map(c => (
+                        <option key={c.isoCode} value={c.name}>{c.name}</option>
+                    ))}
+                </select>
+                <select
+                    className="border rounded px-3 py-2 text-sm w-full"
+                    value={profile.state}
+                    onChange={(e) => { setProfile({ ...profile, state: e.target.value, city: '' }) }}
+                >
+                    <option value="">Select State</option>
+                    {State.getStatesOfCountry(
+                        Country.getAllCountries().find(c => c.name === profile.country)?.isoCode ?? ''
+                    ).map(s => (
+                        <option key={s.isoCode} value={s.name}>{s.name}</option>
+                    ))}
+                </select>
+                <input
+                    type="text"
                     placeholder="City"
                     className="border rounded px-3 py-2 text-sm w-full"
                     value={profile.city}
                     onChange={(e) => { setProfile({ ...profile, city: e.target.value }) }}
-                />
-                <input
-                    type="text"
-                    placeholder="State"
-                    className="border rounded px-3 py-2 text-sm w-full"
-                    value={profile.state}
-                    onChange={(e) => { setProfile({ ...profile, state: e.target.value }) }}
-                />
-                <input
-                    type="text"
-                    placeholder="Country"
-                    className="border rounded px-3 py-2 text-sm w-full"
-                    value={profile.country}
-                    onChange={(e) => { setProfile({ ...profile, country: e.target.value }) }}
                 />
                 <input
                     type="text"
@@ -89,10 +105,17 @@ function App() {
                 />
                 <input
                     type="text"
-                    placeholder="Location (City, Country)"
+                    placeholder="Address Line 1"
                     className="border rounded px-3 py-2 text-sm w-full"
-                    value={profile.location}
-                    onChange={(e) => { setProfile({ ...profile, location: e.target.value }) }}
+                    value={profile.addressLine1}
+                    onChange={(e) => { setProfile({ ...profile, addressLine1: e.target.value }) }}
+                />
+                <input
+                    type="text"
+                    placeholder="Address Line 2"
+                    className="border rounded px-3 py-2 text-sm w-full"
+                    value={profile.addressLine2}
+                    onChange={(e) => { setProfile({ ...profile, addressLine2: e.target.value }) }}
                 />
                 <input
                     type="url"
