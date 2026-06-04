@@ -1,7 +1,4 @@
 import { z } from 'zod'
-import { ExperienceSchema } from './Experience'
-import { EducationSchema } from './Education'
-
 
 export const ProfileSchema = z.object({
   fullName: z.string(),
@@ -19,9 +16,7 @@ export const ProfileSchema = z.object({
   linkedIn: z.string().optional(),
   website: z.string().optional(),
   summary: z.string(),
-  skills: z.array(z.string()),
-  experience: z.array(ExperienceSchema),
-  education: z.array(EducationSchema),
+  skills: z.array(z.string())
 })
 
 export type Profile = z.infer<typeof ProfileSchema>
@@ -36,8 +31,6 @@ export const defaultProfile: Profile = {
     website: '',
     summary: '',
     skills: [],
-    experience: [],
-    education: [],
     firstName: '',
     lastName: '',
     preferredName: '',

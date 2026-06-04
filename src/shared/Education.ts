@@ -8,3 +8,10 @@ export const EducationSchema = z.object({
 })
 
 export type Education = z.infer<typeof EducationSchema>
+ 
+export const defaultEducation : Education = {
+  school: '',
+  degree: '',
+  field: '',
+  graduationYear: '',
+}

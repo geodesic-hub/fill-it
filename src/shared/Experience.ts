@@ -9,3 +9,11 @@ export const ExperienceSchema = z.object({
 })
 
 export type Experience = z.infer<typeof ExperienceSchema>
+
+export const defaultExperience: Experience = {
+company: '',
+  title: '',
+  startDate: '',
+  endDate: '',
+  roleDescription: '',
+}
