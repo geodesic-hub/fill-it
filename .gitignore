@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Extension build artifact (upload to the Web Store, don't commit)
+*.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
