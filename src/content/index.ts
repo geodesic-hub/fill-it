@@ -40,6 +40,33 @@ const educationFieldTerms: Record<keyof Education, string[]> = {
     endYear:   ['to (actual', 'to (', 'graduation', 'completion', 'expected', 'end year', 'end date'],
 }
 
+// Equivalent degree forms grouped together. A saved value matching any term in a
+// group is treated as matching all of them, so "Bachelor of Science" fills a
+// "BS" dropdown and vice versa.
+const degreeSynonyms: string[][] = [
+    ['aa', 'associate of arts', 'associate arts'],
+    ['as', 'associate of science', 'associate science'],
+    ['ba', 'bachelor of arts'],
+    ['bs', 'bsc', 'b.s.', 'bachelor of science'],
+    ['bba', 'bachelor of business administration'],
+    ['be', 'beng', 'bachelor of engineering'],
+    ['btech', 'b.tech', 'bachelor of technology'],
+    ['ma', 'master of arts'],
+    ['ms', 'msc', 'm.s.', 'master of science'],
+    ['mba', 'master of business administration'],
+    ['mtech', 'm.tech', 'master of technology'],
+    ['phd', 'ph.d', 'ph.d.', 'doctor of philosophy', 'doctorate'],
+]
+
+function expandAliases(value: string, groups: string[][]): string[] {
+    const v = value.toLowerCase().trim()
+    const aliases = new Set<string>([value])
+    for (const group of groups) {
+        if (group.includes(v)) group.forEach(term => aliases.add(term))
+    }
+    return Array.from(aliases)
+}
+
 type FillTarget = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 
 const fieldSelector = 'input:not([type="hidden"]), select, textarea'
@@ -53,19 +80,15 @@ function isVisible(el: FillTarget): boolean {
 }
 
 function findElementForLabel(label: HTMLLabelElement): FillTarget | null {
-    // 1. label.control covers for/id links and nested inputs natively
     const control = label.control
     if (isFillTarget(control) && isVisible(control)) return control
 
-    // 2. next sibling
     const next = label.nextElementSibling
     if (isFillTarget(next) && isVisible(next)) return next
 
-    // 3. field inside next sibling (label and input share a wrapper div)
     const insideNext = next?.querySelector<FillTarget>(fieldSelector)
     if (insideNext && isVisible(insideNext)) return insideNext
 
-    // 4. field inside parent (label is sibling of input inside a container)
     const insideParent = label.parentElement?.querySelector<FillTarget>(fieldSelector)
     if (insideParent && isVisible(insideParent)) return insideParent
 
@@ -104,16 +127,25 @@ function hasLabelMatching(root: ParentNode, terms: string[]): boolean {
 const nativeInputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
 const nativeTextareaSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
 
-function fillSelect(select: HTMLSelectElement, value: string) {
-    select.value = value
-    if (select.value === value) return
+// `candidates` are equivalent forms of the value to try (e.g. "Bachelor of
+// Science" and "BS"). Exact matches win first so short codes like "BA" don't
+// get swallowed by a substring of "MBA"; only longer forms allow substring.
+function fillSelect(select: HTMLSelectElement, candidates: string[]) {
+    const wanted = candidates.map(c => c.toLowerCase().trim()).filter(Boolean)
+    if (wanted.length === 0) return
 
-    const v = value.toLowerCase()
-    const match = Array.from(select.options).find(opt => {
-        const text = opt.text.toLowerCase()
-        return text.includes(v) || v.includes(text) || opt.value.toLowerCase().includes(v)
-    })
-    if (match) select.value = match.value
+    const options = Array.from(select.options)
+    const optText = (opt: HTMLOptionElement) => opt.text.toLowerCase().trim()
+    const optVal = (opt: HTMLOptionElement) => opt.value.toLowerCase().trim()
+
+    const exact = options.find(opt => wanted.some(w => optText(opt) === w || optVal(opt) === w))
+    const fuzzy = exact ?? options.find(opt =>
+        wanted.some(w => w.length >= 4 && (optText(opt).includes(w) || w.includes(optText(opt)))))
+
+    if (!fuzzy) return
+    select.value = fuzzy.value
+    select.dispatchEvent(new Event('input',  { bubbles: true }))
+    select.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 function fillInput(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -123,8 +155,8 @@ function fillInput(input: HTMLInputElement | HTMLTextAreaElement, value: string)
     input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-function fillElement(el: FillTarget, value: string) {
-    if (el instanceof HTMLSelectElement) fillSelect(el, value)
+function fillElement(el: FillTarget, value: string, candidates: string[] = [value]) {
+    if (el instanceof HTMLSelectElement) fillSelect(el, candidates)
     else fillInput(el, value)
 }
 
@@ -143,6 +175,8 @@ type SectionConfig<T> = {
     anchorTerms: string[]             // field that marks the start of a section
     secondaryTerms: string[]          // a second field used to scope the section
     addButtonPattern: RegExp          // matches the "Add another" button label
+    // Optional per-field synonym groups for matching dropdown options.
+    aliases?: Partial<Record<keyof T, string[][]>>
 }
 
 const experienceConfig: SectionConfig<Experience> = {
@@ -159,6 +193,7 @@ const educationConfig: SectionConfig<Education> = {
     // isn't a native field; combine it with degree to scope the section.
     secondaryTerms: [...educationFieldTerms.degree, ...educationFieldTerms.field],
     addButtonPattern: /education|school|degree|university|college|qualification/,
+    aliases: { degree: degreeSynonyms },
 }
 
 function isButtonVisible(el: HTMLElement): boolean {
@@ -223,7 +258,9 @@ function fillSection<T>(section: ParentNode, config: SectionConfig<T>, item: T) 
     for (const field of Object.keys(config.terms) as (keyof T)[]) {
         const value = String(item[field] ?? '')
         if (!value) continue
-        findFieldElementsIn(section, config.terms[field]).forEach(el => fillElement(el, value))
+        const groups = config.aliases?.[field]
+        const candidates = groups ? expandAliases(value, groups) : [value]
+        findFieldElementsIn(section, config.terms[field]).forEach(el => fillElement(el, value, candidates))
     }
 }
 

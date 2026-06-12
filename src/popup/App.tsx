@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react"
 import { Country, State } from 'country-state-city'
-import { loadEducation, loadExperience, loadProfile, saveEducation, saveExperience, saveProfile } from "../shared/Storage"
+import { loadActiveTab, loadEducation, loadExperience, loadProfile, saveActiveTab, saveEducation, saveExperience, saveProfile, type ActiveTab } from "../shared/Storage"
 import { defaultProfile, type Profile } from "../shared/Profile";
 import { defaultEducation, type Education } from "../shared/Education";
 import { defaultExperience, type Experience } from "../shared/Experience";
 import { useAccordion } from "./useAccordion";
+import { useDirtyState } from "./useDirtyState";
 
-type Tab = 'profile' | 'experience' | 'education'
+type Tab = ActiveTab
 
 function App() {
-    const [profile, setProfile] = useState<Profile>(defaultProfile)
-    const [education, setEducation] = useState<Education[]>([])
-    const [experience, setExperience] = useState<Experience[]>([])
+    // Each value tracks its own unsaved-changes flag so we can remind the user
+    // to save. `set*` flags dirty automatically; `clean*` clears it on save/load.
+    const [profile, setProfile, dirtyProfile, cleanProfile] = useDirtyState<Profile>(defaultProfile)
+    const [education, setEducation, dirtyEducation, cleanEducation] = useDirtyState<Education[]>([])
+    const [experience, setExperience, dirtyExperience, cleanExperience] = useDirtyState<Experience[]>([])
     const [activeTab, setActiveTab] = useState<Tab>('profile')
     const [toast, setToast] = useState<string | null>(null)
     const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -25,17 +28,30 @@ function App() {
         toastTimer.current = setTimeout(() => setToast(null), 2000)
     }
 
+    function selectTab(tab: Tab): void {
+        setActiveTab(tab)
+        void saveActiveTab(tab)
+    }
+
     useEffect(() => {
         async function load() {
             const storedProfile = await loadProfile();
             const storedEducation = await loadEducation();
             const storedExperience = await loadExperience();
-            setProfile(storedProfile)
-            setExperience(storedExperience.length === 0 ? [defaultExperience] : storedExperience)
-            setEducation(storedEducation.length === 0 ? [defaultEducation] : storedEducation)
+            const storedTab = await loadActiveTab();
+            cleanProfile(storedProfile)
+            cleanExperience(storedExperience.length === 0 ? [defaultExperience] : storedExperience)
+            cleanEducation(storedEducation.length === 0 ? [defaultEducation] : storedEducation)
+            setActiveTab(storedTab)
         }
         load();
-    }, [])
+    }, [cleanProfile, cleanExperience, cleanEducation])
+
+    const dirty: Record<Tab, boolean> = {
+        profile: dirtyProfile,
+        experience: dirtyExperience,
+        education: dirtyEducation,
+    }
 
     function onFillIt(): void {
         chrome.tabs.query({ active: true, currentWindow: true },
@@ -48,7 +64,7 @@ function App() {
 
     return (
         <div className="w-96 p-4 font-sans">
-            <h1 className="text-xl font-bold mb-4">Fill It</h1>
+            <img src="/icons/icon-128.png" alt="Fill It" className="h-8 w-8 rounded mb-2" />
 
             {toast && (
                 <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 rounded bg-green-100 border border-green-300 text-green-800 px-3 py-2 text-sm shadow-md">
@@ -57,10 +73,16 @@ function App() {
             )}
 
             <div className="flex border-b mb-4">
-                <button type="button" className={tabClass('profile')} onClick={() => setActiveTab('profile')}>Profile</button>
-                <button type="button" className={tabClass('experience')} onClick={() => setActiveTab('experience')}>Experience</button>
-                <button type="button" className={tabClass('education')} onClick={() => setActiveTab('education')}>Education</button>
+                <button type="button" className={tabClass('profile')} onClick={() => selectTab('profile')}>Profile{dirty.profile && <span className="text-amber-500"> •</span>}</button>
+                <button type="button" className={tabClass('experience')} onClick={() => selectTab('experience')}>Experience{dirty.experience && <span className="text-amber-500"> •</span>}</button>
+                <button type="button" className={tabClass('education')} onClick={() => selectTab('education')}>Education{dirty.education && <span className="text-amber-500"> •</span>}</button>
             </div>
+
+            {dirty[activeTab] && (
+                <div className="mb-3 rounded bg-amber-50 border border-amber-300 text-amber-800 px-3 py-2 text-xs">
+                    You have unsaved changes — don’t forget to <span className="font-medium">Save</span>.
+                </div>
+            )}
 
             {activeTab === 'profile' && (
                 <div className="flex flex-col gap-3">
@@ -180,7 +202,7 @@ function App() {
                     <button
                         type="button"
                         className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium"
-                        onClick={() => { saveProfile(profile); showToast('Profile saved') }}
+                        onClick={() => { saveProfile(profile); cleanProfile(profile); showToast('Profile saved') }}
                     >
                         Save
                     </button>
@@ -196,16 +218,6 @@ function App() {
 
             {activeTab === 'experience' && (
                 <div className="flex flex-col gap-3">
-                    {/* {experience.map((exp, i) => (
-                        <div key={i} className="border rounded p-3 text-sm flex justify-between items-start">
-                            <div>
-                                <div className="font-medium">{exp.title}</div>
-                                <div className="text-gray-500">{exp.company}</div>
-                                <div className="text-gray-400 text-xs">{exp.startDate} — {exp.endDate || 'Present'}</div>
-                            </div>
-                            <button type="button" className="text-red-500 text-xs ml-2">Remove</button>
-                        </div>
-                    ))} */}
                     <div className="flex gap-2">
                         <button type="button" className="border rounded px-3 py-1 text-sm font-medium text-gray-600" onClick={expAccordion.expandAll}>Expand all</button>
                         <button type="button" className="border rounded px-3 py-1 text-sm font-medium text-gray-600" onClick={expAccordion.collapseAll}>Collapse all</button>
@@ -232,14 +244,14 @@ function App() {
                                     <textarea placeholder="Description" rows={3} className="border rounded px-3 py-2 text-sm w-full resize-none"
                                         value={exp.roleDescription}
                                         onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], roleDescription: e.target.value }; setExperience(updated) }} />
-                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={() => { saveExperience(experience); showToast('Experience saved') }}>Save</button>
+                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={() => { saveExperience(experience); cleanExperience(experience); showToast('Experience saved') }}>Save</button>
                                     <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={onFillIt}>Fill</button>
-                                    <button type="button" className="text-red-500 text-sm" onClick={() => { const updated = experience.filter((_, idx) => idx !== i); setExperience(updated); saveExperience(updated) }}>Remove</button>
+                                    <button type="button" className="text-red-500 text-sm" onClick={() => { const updated = experience.filter((_, idx) => idx !== i); saveExperience(updated); cleanExperience(updated) }}>Remove</button>
                                 </div>
                             </details>
                         ))}
                         <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium"
-                            onClick={() => setExperience([...experience, { company: '', title: '', startDate: '', endDate: '', roleDescription: '' }])}>
+                            onClick={() => setExperience([...experience, { ...defaultExperience }])}>
                             Add Experience
                         </button>
                     </div>
@@ -276,9 +288,9 @@ function App() {
                                             value={edu.endYear}
                                             onChange={(e) => { const updated = [...education]; updated[i] = { ...updated[i], endYear: e.target.value }; setEducation(updated) }} />
                                     </div>
-                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={() => { saveEducation(education); showToast('Education saved') }}>Save</button>
+                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={() => { saveEducation(education); cleanEducation(education); showToast('Education saved') }}>Save</button>
                                     <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={onFillIt}>Fill</button>
-                                    <button type="button" className="text-red-500 text-sm" onClick={() => { const updated = education.filter((_, idx) => idx !== i); setEducation(updated); saveEducation(updated) }}>Remove</button>
+                                    <button type="button" className="text-red-500 text-sm" onClick={() => { const updated = education.filter((_, idx) => idx !== i); saveEducation(updated); cleanEducation(updated) }}>Remove</button>
                                 </div>
                             </details>
                         ))}

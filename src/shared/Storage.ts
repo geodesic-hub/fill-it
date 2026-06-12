@@ -1,5 +1,5 @@
 import { defaultEducation, EducationSchema, type Education } from "./Education";
-import { defaultExperience, ExperienceSchema, type Experience } from "./Experience";
+import { ExperienceSchema, type Experience } from "./Experience";
 import { defaultProfile, ProfileSchema, type Profile } from "./Profile";
 
 
@@ -29,6 +29,19 @@ export async function loadExperience(): Promise<Experience[]> {
     const parsed = ExperienceSchema.array().safeParse(result.experience);
 
     return parsed.success ? parsed.data : [];
+}
+
+export type ActiveTab = 'profile' | 'experience' | 'education'
+
+// UI preference — kept in local (per-device) storage, not synced.
+export async function saveActiveTab(activeTab: ActiveTab): Promise<void> {
+    await chrome.storage.local.set({ activeTab });
+}
+
+export async function loadActiveTab(): Promise<ActiveTab> {
+    const result = await chrome.storage.local.get('activeTab');
+    const tab = result.activeTab;
+    return tab === 'experience' || tab === 'education' ? tab : 'profile';
 }
 
 export async function saveEducation(education: Education[]): Promise<void> {
