@@ -44,6 +44,18 @@ export async function loadActiveTab(): Promise<ActiveTab> {
     return tab === 'experience' || tab === 'education' ? tab : 'profile';
 }
 
+export type Theme = 'system' | 'light' | 'dark'
+
+export async function saveTheme(theme: Theme): Promise<void> {
+    await chrome.storage.local.set({ theme });
+}
+
+export async function loadTheme(): Promise<Theme> {
+    const result = await chrome.storage.local.get('theme');
+    const theme = result.theme;
+    return theme === 'light' || theme === 'dark' ? theme : 'system';
+}
+
 export async function saveEducation(education: Education[]): Promise<void> {
     await chrome.storage.sync.set({ education });
 }
