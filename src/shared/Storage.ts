@@ -31,7 +31,7 @@ export async function loadExperience(): Promise<Experience[]> {
     return parsed.success ? parsed.data : [];
 }
 
-export async function saveEducation(education: Education): Promise<void> {
+export async function saveEducation(education: Education[]): Promise<void> {
     await chrome.storage.sync.set({ education });
 }
 

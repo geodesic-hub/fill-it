@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Country, State } from 'country-state-city'
-import { loadEducation, loadExperience, loadProfile, saveExperience, saveProfile } from "../shared/Storage"
+import { loadEducation, loadExperience, loadProfile, saveEducation, saveExperience, saveProfile } from "../shared/Storage"
 import { defaultProfile, type Profile } from "../shared/Profile";
 import { defaultEducation, type Education } from "../shared/Education";
 import { defaultExperience, type Experience } from "../shared/Experience";
+import { useAccordion } from "./useAccordion";
 
 type Tab = 'profile' | 'experience' | 'education'
 
@@ -12,8 +13,17 @@ function App() {
     const [education, setEducation] = useState<Education[]>([])
     const [experience, setExperience] = useState<Experience[]>([])
     const [activeTab, setActiveTab] = useState<Tab>('profile')
-    const [newExp, setNewExp] = useState({ company: '', title: '', startDate: '', endDate: '', roleDescription: '' })
+    const [toast, setToast] = useState<string | null>(null)
+    const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
+    const expAccordion = useAccordion()
+    const eduAccordion = useAccordion()
+
+    function showToast(message: string): void {
+        setToast(message)
+        clearTimeout(toastTimer.current)
+        toastTimer.current = setTimeout(() => setToast(null), 2000)
+    }
 
     useEffect(() => {
         async function load() {
@@ -21,15 +31,16 @@ function App() {
             const storedEducation = await loadEducation();
             const storedExperience = await loadExperience();
             setProfile(storedProfile)
-           setExperience(storedExperience.length === 0 ? [defaultExperience] : storedExperience)
-
+            setExperience(storedExperience.length === 0 ? [defaultExperience] : storedExperience)
+            setEducation(storedEducation.length === 0 ? [defaultEducation] : storedEducation)
         }
         load();
     }, [])
 
     function onFillIt(): void {
         chrome.tabs.query({ active: true, currentWindow: true },
-            (tabs) => { chrome.tabs.sendMessage(tabs[0].id!, { action: 'fill', profile }) })
+            (tabs) => { chrome.tabs.sendMessage(tabs[0].id!, { action: 'fill', profile, experience, education }) })
+        showToast('Filling form on the active tab…')
     }
 
     const tabClass = (tab: Tab) =>
@@ -38,6 +49,12 @@ function App() {
     return (
         <div className="w-96 p-4 font-sans">
             <h1 className="text-xl font-bold mb-4">Fill It</h1>
+
+            {toast && (
+                <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 rounded bg-green-100 border border-green-300 text-green-800 px-3 py-2 text-sm shadow-md">
+                    {toast}
+                </div>
+            )}
 
             <div className="flex border-b mb-4">
                 <button type="button" className={tabClass('profile')} onClick={() => setActiveTab('profile')}>Profile</button>
@@ -163,7 +180,7 @@ function App() {
                     <button
                         type="button"
                         className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium"
-                        onClick={() => saveProfile(profile)}
+                        onClick={() => { saveProfile(profile); showToast('Profile saved') }}
                     >
                         Save
                     </button>
@@ -189,29 +206,37 @@ function App() {
                             <button type="button" className="text-red-500 text-xs ml-2">Remove</button>
                         </div>
                     ))} */}
-                    <div>
+                    <div className="flex gap-2">
+                        <button type="button" className="border rounded px-3 py-1 text-sm font-medium text-gray-600" onClick={expAccordion.expandAll}>Expand all</button>
+                        <button type="button" className="border rounded px-3 py-1 text-sm font-medium text-gray-600" onClick={expAccordion.collapseAll}>Collapse all</button>
+                    </div>
+                    <div ref={expAccordion.listRef} className="flex flex-col gap-2">
                         {experience.map((exp, i) => (
-                            <div key={i} className="border rounded p-3 flex flex-col gap-2">
-                                <p className="text-xs text-gray-500 font-medium">Experience {i + 1}</p>
-                                <input type="text" placeholder="Company" className="border rounded px-3 py-2 text-sm w-full"
-                                    value={exp.company}
-                                    onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], company: e.target.value }; setExperience(updated) }} />
-                                <input type="text" placeholder="Title" className="border rounded px-3 py-2 text-sm w-full"
-                                    value={exp.title}
-                                    onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], title: e.target.value }; setExperience(updated) }} />
-                                <input type="text" placeholder="Start Date" className="border rounded px-3 py-2 text-sm w-full"
-                                    value={exp.startDate}
-                                    onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], startDate: e.target.value }; setExperience(updated) }} />
-                                <input type="text" placeholder="End Date (leave blank if current)" className="border rounded px-3 py-2 text-sm w-full"
-                                    value={exp.endDate ?? ''}
-                                    onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], endDate: e.target.value }; setExperience(updated) }} />
-                                <textarea placeholder="Description" rows={3} className="border rounded px-3 py-2 text-sm w-full resize-none"
-                                    value={exp.roleDescription}
-                                    onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], roleDescription: e.target.value }; setExperience(updated) }} />
-                                <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={() => saveExperience(experience)}>Save</button>
-                                <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={onFillIt}>Fill</button>
-                                <button type="button" className="text-red-500 text-sm" onClick={() => { const updated = experience.filter((_, idx) => idx !== i); setExperience(updated); saveExperience(updated) }}>Remove</button>
-                            </div>
+                            <details key={i} onToggle={expAccordion.onToggle} className="border rounded">
+                                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
+                                    Experience {i + 1}{exp.company ? ` — ${exp.company}` : ''}
+                                </summary>
+                                <div className="flex flex-col gap-2 p-3 pt-0">
+                                    <input type="text" placeholder="Company" className="border rounded px-3 py-2 text-sm w-full"
+                                        value={exp.company}
+                                        onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], company: e.target.value }; setExperience(updated) }} />
+                                    <input type="text" placeholder="Title" className="border rounded px-3 py-2 text-sm w-full"
+                                        value={exp.title}
+                                        onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], title: e.target.value }; setExperience(updated) }} />
+                                    <input type="text" placeholder="Start Date" className="border rounded px-3 py-2 text-sm w-full"
+                                        value={exp.startDate}
+                                        onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], startDate: e.target.value }; setExperience(updated) }} />
+                                    <input type="text" placeholder="End Date (leave blank if current)" className="border rounded px-3 py-2 text-sm w-full"
+                                        value={exp.endDate ?? ''}
+                                        onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], endDate: e.target.value }; setExperience(updated) }} />
+                                    <textarea placeholder="Description" rows={3} className="border rounded px-3 py-2 text-sm w-full resize-none"
+                                        value={exp.roleDescription}
+                                        onChange={(e) => { const updated = [...experience]; updated[i] = { ...updated[i], roleDescription: e.target.value }; setExperience(updated) }} />
+                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={() => { saveExperience(experience); showToast('Experience saved') }}>Save</button>
+                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={onFillIt}>Fill</button>
+                                    <button type="button" className="text-red-500 text-sm" onClick={() => { const updated = experience.filter((_, idx) => idx !== i); setExperience(updated); saveExperience(updated) }}>Remove</button>
+                                </div>
+                            </details>
                         ))}
                         <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium"
                             onClick={() => setExperience([...experience, { company: '', title: '', startDate: '', endDate: '', roleDescription: '' }])}>
@@ -223,7 +248,45 @@ function App() {
 
             {activeTab === 'education' && (
                 <div className="flex flex-col gap-3">
-                    <p className="text-sm text-gray-400">Coming soon</p>
+                    <div className="flex gap-2">
+                        <button type="button" className="border rounded px-3 py-1 text-sm font-medium text-gray-600" onClick={eduAccordion.expandAll}>Expand all</button>
+                        <button type="button" className="border rounded px-3 py-1 text-sm font-medium text-gray-600" onClick={eduAccordion.collapseAll}>Collapse all</button>
+                    </div>
+                    <div ref={eduAccordion.listRef} className="flex flex-col gap-2">
+                        {education.map((edu, i) => (
+                            <details key={i} onToggle={eduAccordion.onToggle} className="border rounded">
+                                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
+                                    Education {i + 1}{edu.school ? ` — ${edu.school}` : ''}
+                                </summary>
+                                <div className="flex flex-col gap-2 p-3 pt-0">
+                                    <input type="text" placeholder="School" className="border rounded px-3 py-2 text-sm w-full"
+                                        value={edu.school}
+                                        onChange={(e) => { const updated = [...education]; updated[i] = { ...updated[i], school: e.target.value }; setEducation(updated) }} />
+                                    <input type="text" placeholder="Degree" className="border rounded px-3 py-2 text-sm w-full"
+                                        value={edu.degree}
+                                        onChange={(e) => { const updated = [...education]; updated[i] = { ...updated[i], degree: e.target.value }; setEducation(updated) }} />
+                                    <input type="text" placeholder="Field of Study" className="border rounded px-3 py-2 text-sm w-full"
+                                        value={edu.field}
+                                        onChange={(e) => { const updated = [...education]; updated[i] = { ...updated[i], field: e.target.value }; setEducation(updated) }} />
+                                    <div className="flex gap-2">
+                                        <input type="text" placeholder="From (YYYY)" className="border rounded px-3 py-2 text-sm w-full"
+                                            value={edu.startYear}
+                                            onChange={(e) => { const updated = [...education]; updated[i] = { ...updated[i], startYear: e.target.value }; setEducation(updated) }} />
+                                        <input type="text" placeholder="To (YYYY)" className="border rounded px-3 py-2 text-sm w-full"
+                                            value={edu.endYear}
+                                            onChange={(e) => { const updated = [...education]; updated[i] = { ...updated[i], endYear: e.target.value }; setEducation(updated) }} />
+                                    </div>
+                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={() => { saveEducation(education); showToast('Education saved') }}>Save</button>
+                                    <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium" onClick={onFillIt}>Fill</button>
+                                    <button type="button" className="text-red-500 text-sm" onClick={() => { const updated = education.filter((_, idx) => idx !== i); setEducation(updated); saveEducation(updated) }}>Remove</button>
+                                </div>
+                            </details>
+                        ))}
+                        <button type="button" className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium"
+                            onClick={() => setEducation([...education, { ...defaultEducation }])}>
+                            Add Education
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
